@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aidan, Joe and Adam's Lovely Guinness Tour</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Inter:wght@300;400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --cream: #F5E6C8;
+    --gold: #C8A951;
+    --dark: #1A1209;
+    --stout: #2B1A0E;
+    --stout-mid: #3D2817;
+    --foam: #F2E8D5;
+    --foam-light: #FFF8EC;
+    --ruby: #6B1C23;
+    --harp-gold: #D4A843;
+  }
+
+  body {
+    background: var(--dark);
+    color: var(--foam);
+    font-family: 'Inter', -apple-system, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(200,169,81,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(107,28,35,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(200,169,81,0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* HEADER */
+  .header {
+    text-align: center;
+    padding: 50px 0 30px;
+    position: relative;
+  }
+
+  .header::after {
+    content: '';
+    display: block;
+    width: 80px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    margin: 0 auto;
+  }
+
+  .harp-icon {
+    font-size: 42px;
+    margin-bottom: 8px;
+    display: block;
+    filter: drop-shadow(0 0 20px rgba(200,169,81,0.3));
+  }
+
+  .header h1 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: 28px;
+    color: var(--foam-light);
+    letter-spacing: 0.5px;
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+
+  .header h1 .names {
+    display: block;
+    font-size: 32px;
+    background: linear-gradient(135deg, var(--gold), var(--cream), var(--gold));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header .subtitle {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 15px;
+    color: var(--gold);
+    opacity: 0.8;
+    margin-top: 12px;
+    letter-spacing: 1px;
+  }
+
+  .pint-count {
+    display: inline-block;
+    margin-top: 16px;
+    padding: 6px 20px;
+    border: 1px solid rgba(200,169,81,0.3);
+    border-radius: 30px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    background: rgba(200,169,81,0.05);
+  }
+
+  /* MAP SECTION */
+  .map-section {
+    margin: 30px 0;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(200,169,81,0.2);
+    background: var(--stout);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  .map-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, var(--stout-mid), var(--stout));
+    border-bottom: 1px solid rgba(200,169,81,0.15);
+  }
+
+  .map-label span {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .map-label .tap-hint {
+    font-size: 11px;
+    color: rgba(242,232,213,0.5);
+    letter-spacing: 0.5px;
+    text-transform: none;
+  }
+
+  .map-wrapper {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    cursor: pointer;
+    display: block;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }
+
+  .map-wrapper:hover { opacity: 0.95; }
+
+  .map-wrapper .map-svg-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1e2d1e;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .map-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 16px;
+    background: linear-gradient(to top, rgba(26,18,9,0.7) 0%, transparent 40%);
+    z-index: 2;
+  }
+
+  .map-overlay .open-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: rgba(26,18,9,0.85);
+    border: 1px solid rgba(200,169,81,0.4);
+    border-radius: 30px;
+    color: var(--foam-light);
+    font-size: 13px;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .map-overlay .open-btn svg {
+    width: 16px;
+    height: 16px;
+    fill: var(--gold);
+  }
+
+  /* ROUTE INFO */
+  .route-info {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin: 24px 0 8px;
+    padding: 16px 0;
+  }
+
+  .route-stat {
+    text-align: center;
+  }
+
+  .route-stat .value {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--foam-light);
+  }
+
+  .route-stat .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: rgba(200,169,81,0.7);
+    margin-top: 2px;
+  }
+
+  .divider-dot {
+    align-self: center;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(200,169,81,0.3);
+  }
+
+  /* ROUTE SECTION */
+  .route-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--foam-light);
+    text-align: center;
+    margin: 30px 0 24px;
+    position: relative;
+  }
+
+  .route-title::before,
+  .route-title::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 60px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(200,169,81,0.3));
+  }
+  .route-title::before { right: calc(50% + 100px); }
+  .route-title::after { left: calc(50% + 100px); transform: scaleX(-1); }
+
+  /* PUB CARDS */
+  .pub-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .pub-list::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 40px;
+    bottom: 40px;
+    width: 2px;
+    background: linear-gradient(to bottom,
+      var(--gold),
+      rgba(200,169,81,0.3) 15%,
+      rgba(200,169,81,0.3) 85%,
+      var(--gold));
+    z-index: 0;
+  }
+
+  .pub-card {
+    display: flex;
+    gap: 20px;
+    padding: 20px 0;
+    position: relative;
+    z-index: 1;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s;
+  }
+
+  .pub-card:hover { transform: translateX(4px); }
+
+  .stop-marker {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: 20px;
+    color: var(--dark);
+    background: linear-gradient(135deg, var(--gold), var(--harp-gold));
+    box-shadow: 0 4px 16px rgba(200,169,81,0.3), 0 0 0 4px var(--dark), 0 0 0 5px rgba(200,169,81,0.2);
+    position: relative;
+  }
+
+  .pub-card:first-child .stop-marker::before {
+    content: 'START';
+    position: absolute;
+    top: -18px;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .pub-card:last-child .stop-marker::before {
+    content: 'FINISH';
+    position: absolute;
+    top: -18px;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .pub-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pub-rank {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--gold);
+    margin-bottom: 4px;
+    opacity: 0.8;
+  }
+
+  .pub-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--foam-light);
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+
+  .pub-vibe {
+    font-size: 14px;
+    color: rgba(242,232,213,0.65);
+    line-height: 1.5;
+    font-style: italic;
+    margin-bottom: 10px;
+  }
+
+  .pub-address {
+    font-size: 12px;
+    color: rgba(242,232,213,0.4);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pub-address svg {
+    width: 12px;
+    height: 12px;
+    fill: rgba(200,169,81,0.5);
+    flex-shrink: 0;
+  }
+
+  .pub-tag {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+  }
+
+  .tag-harp {
+    background: rgba(200,169,81,0.12);
+    color: var(--gold);
+    border: 1px solid rgba(200,169,81,0.2);
+  }
+
+  .tag-gem {
+    background: rgba(107,28,35,0.2);
+    color: #E8A0A7;
+    border: 1px solid rgba(107,28,35,0.3);
+  }
+
+  .tag-local {
+    background: rgba(100,160,100,0.12);
+    color: #90C090;
+    border: 1px solid rgba(100,160,100,0.2);
+  }
+
+  .tag-winner {
+    background: rgba(200,169,81,0.2);
+    color: var(--gold);
+    border: 1px solid rgba(200,169,81,0.35);
+  }
+
+  .tag-cosy {
+    background: rgba(180,120,80,0.15);
+    color: #D4A880;
+    border: 1px solid rgba(180,120,80,0.25);
+  }
+
+  .open-maps-hint {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: rgba(200,169,81,0.5);
+    transition: color 0.2s;
+  }
+
+  .pub-card:hover .open-maps-hint {
+    color: var(--gold);
+  }
+
+  .open-maps-hint svg {
+    width: 11px;
+    height: 11px;
+    fill: currentColor;
+  }
+
+  /* Walk segments */
+  .walk-segment {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0 4px 18px;
+    margin-left: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .walk-segment .walk-icon {
+    font-size: 13px;
+    opacity: 0.5;
+  }
+
+  .walk-segment .walk-text {
+    font-size: 11px;
+    color: rgba(242,232,213,0.35);
+    letter-spacing: 0.5px;
+  }
+
+  /* FOOTER */
+  .footer {
+    text-align: center;
+    margin-top: 50px;
+    padding-top: 30px;
+    border-top: 1px solid rgba(200,169,81,0.1);
+  }
+
+  .footer .cheers {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-style: italic;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+
+  .footer .credit {
+    font-size: 11px;
+    color: rgba(242,232,213,0.3);
+    letter-spacing: 1px;
+  }
+
+  .footer .pint-emoji {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 16px;
+  }
+
+  /* Full route button */
+  .full-route-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 18px 24px;
+    margin-top: 30px;
+    background: linear-gradient(135deg, var(--stout-mid), var(--stout));
+    border: 1px solid rgba(200,169,81,0.3);
+    border-radius: 14px;
+    color: var(--foam-light);
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  .full-route-btn:hover {
+    border-color: var(--gold);
+    box-shadow: 0 4px 24px rgba(200,169,81,0.15);
+    transform: translateY(-1px);
+  }
+
+  .full-route-btn svg {
+    width: 20px;
+    height: 20px;
+    fill: var(--gold);
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .header { animation: fadeUp 0.6s ease-out; }
+  .map-section { animation: fadeUp 0.6s ease-out 0.1s both; }
+  .pub-card:nth-child(1) { animation: fadeUp 0.5s ease-out 0.2s both; }
+  .pub-card:nth-child(3) { animation: fadeUp 0.5s ease-out 0.3s both; }
+  .pub-card:nth-child(5) { animation: fadeUp 0.5s ease-out 0.4s both; }
+  .pub-card:nth-child(7) { animation: fadeUp 0.5s ease-out 0.5s both; }
+  .pub-card:nth-child(9) { animation: fadeUp 0.5s ease-out 0.6s both; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <span class="harp-icon">&#127866;</span>
+    <h1>
+      <span class="names">Aidan, Joe &amp; Adam's</span>
+      Lovely Guinness Tour
+    </h1>
+    <div class="subtitle">Brighton &bull; An Optimal Pint Crawl</div>
+    <div class="pint-count">5 Pubs &bull; 5 Pints &bull; 1 Beautiful Route</div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-section">
+    <div class="map-label">
+      <span>The Route</span>
+      <span class="tap-hint">Tap map to open in Google Maps</span>
+    </div>
+    <a class="map-wrapper"
+       href="https://www.google.com/maps/dir/The+Geese,+16+Southover+Street,+Brighton+BN2+9UA/Heart+and+Hand,+75+North+Road,+Brighton+BN1+1YD/Alphabet,+11+Dyke+Road,+Brighton+BN1+3FE/Lion+%26+Lobster,+24+Sillwood+Street,+Brighton+BN1+2PS/Fiddler's+Elbow,+11+Boyces+Street,+Brighton+BN1+1AN/@50.826,-0.145,15z/data=!4m2!4m1!3e2"
+       target="_blank"
+       rel="noopener noreferrer">
+      <div class="map-svg-container">
+        <svg viewBox="0 0 480 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;">
+          <defs>
+            <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#1a3a4a"/>
+              <stop offset="100%" stop-color="#0f2a3a"/>
+            </linearGradient>
+            <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#2a3a28"/>
+              <stop offset="100%" stop-color="#1e2d1e"/>
+            </linearGradient>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#C8A951" opacity="0.6"/>
+            </marker>
+          </defs>
+
+          <!-- Sea -->
+          <rect x="0" y="260" width="480" height="60" fill="url(#sea)"/>
+          <!-- Coastline -->
+          <path d="M0 262 Q60 255, 120 258 Q180 261, 240 256 Q300 252, 360 258 Q420 262, 480 257" fill="none" stroke="#3a5a6a" stroke-width="1.5" opacity="0.5"/>
+
+          <!-- Land -->
+          <rect x="0" y="0" width="480" height="262" fill="url(#land)"/>
+
+          <!-- Street grid (subtle) -->
+          <!-- Major roads -->
+          <line x1="240" y1="0" x2="240" y2="262" stroke="#384838" stroke-width="2.5" opacity="0.4"/>
+          <line x1="0" y1="200" x2="480" y2="200" stroke="#384838" stroke-width="2.5" opacity="0.4"/>
+          <line x1="0" y1="160" x2="480" y2="160" stroke="#354535" stroke-width="1.5" opacity="0.3"/>
+          <!-- North Road (vertical, slightly east of center) -->
+          <line x1="280" y1="0" x2="280" y2="200" stroke="#354535" stroke-width="1.5" opacity="0.3"/>
+          <!-- Dyke Road (northwest diagonal) -->
+          <line x1="180" y1="0" x2="220" y2="200" stroke="#354535" stroke-width="1.5" opacity="0.3"/>
+          <!-- Minor streets -->
+          <line x1="100" y1="0" x2="100" y2="262" stroke="#2e3e2e" stroke-width="1" opacity="0.25"/>
+          <line x1="160" y1="0" x2="160" y2="262" stroke="#2e3e2e" stroke-width="1" opacity="0.25"/>
+          <line x1="320" y1="0" x2="320" y2="262" stroke="#2e3e2e" stroke-width="1" opacity="0.25"/>
+          <line x1="400" y1="0" x2="400" y2="262" stroke="#2e3e2e" stroke-width="1" opacity="0.25"/>
+          <line x1="0" y1="80" x2="480" y2="80" stroke="#2e3e2e" stroke-width="1" opacity="0.25"/>
+          <line x1="0" y1="120" x2="480" y2="120" stroke="#2e3e2e" stroke-width="1" opacity="0.25"/>
+          <line x1="0" y1="240" x2="480" y2="240" stroke="#2e3e2e" stroke-width="1" opacity="0.25"/>
+
+          <!-- Parks / green areas -->
+          <ellipse cx="340" cy="100" rx="30" ry="20" fill="#243824" opacity="0.5"/>
+          <text x="340" y="104" text-anchor="middle" fill="#4a6a4a" font-size="7" font-family="Inter, sans-serif" opacity="0.5">The Level</text>
+
+          <!-- Road labels -->
+          <text x="215" y="145" fill="#4a6a4a" font-size="6" font-family="Inter, sans-serif" opacity="0.4" transform="rotate(-80 215 145)">Dyke Rd</text>
+          <text x="283" y="145" fill="#4a6a4a" font-size="6" font-family="Inter, sans-serif" opacity="0.4" transform="rotate(-90 283 145)">North Rd</text>
+          <text x="300" y="196" fill="#4a6a4a" font-size="6" font-family="Inter, sans-serif" opacity="0.4">North Street</text>
+          <text x="200" y="253" fill="#3a5a6a" font-size="6" font-family="Inter, sans-serif" opacity="0.4">Kings Road / Seafront</text>
+
+          <!-- Route path (dashed, animated) -->
+          <path d="M410 55 L290 120 L195 115 L130 210 L270 215"
+                fill="none" stroke="#C8A951" stroke-width="2.5" stroke-dasharray="8 4"
+                opacity="0.6" filter="url(#glow)" marker-end="url(#arrowhead)">
+            <animate attributeName="stroke-dashoffset" from="24" to="0" dur="2s" repeatCount="indefinite"/>
+          </path>
+
+          <!-- Pub markers -->
+          <!-- 1. The Geese (Hanover - northeast) -->
+          <circle cx="410" cy="55" r="16" fill="#1A1209" stroke="#C8A951" stroke-width="2"/>
+          <text x="410" y="60" text-anchor="middle" fill="#C8A951" font-size="14" font-weight="900" font-family="Playfair Display, serif">1</text>
+          <text x="410" y="38" text-anchor="middle" fill="#F2E8D5" font-size="7" font-weight="600" font-family="Inter, sans-serif">The Geese</text>
+
+          <!-- 2. Heart & Hand (North Road - north central) -->
+          <circle cx="290" cy="120" r="16" fill="#1A1209" stroke="#C8A951" stroke-width="2"/>
+          <text x="290" y="125" text-anchor="middle" fill="#C8A951" font-size="14" font-weight="900" font-family="Playfair Display, serif">2</text>
+          <text x="290" y="108" text-anchor="end" fill="#F2E8D5" font-size="7" font-weight="600" font-family="Inter, sans-serif">Heart &amp; Hand</text>
+
+          <!-- 3. Alphabet (Dyke Road - northwest) -->
+          <circle cx="195" cy="115" r="16" fill="#1A1209" stroke="#C8A951" stroke-width="2"/>
+          <text x="195" y="120" text-anchor="middle" fill="#C8A951" font-size="14" font-weight="900" font-family="Playfair Display, serif">3</text>
+          <text x="195" y="99" text-anchor="middle" fill="#F2E8D5" font-size="7" font-weight="600" font-family="Inter, sans-serif">Alphabet</text>
+
+          <!-- 4. Lion & Lobster (Sillwood St - west) -->
+          <circle cx="130" cy="210" r="16" fill="#1A1209" stroke="#C8A951" stroke-width="2"/>
+          <text x="130" y="215" text-anchor="middle" fill="#C8A951" font-size="14" font-weight="900" font-family="Playfair Display, serif">4</text>
+          <text x="130" y="194" text-anchor="middle" fill="#F2E8D5" font-size="7" font-weight="600" font-family="Inter, sans-serif">Lion &amp; Lobster</text>
+
+          <!-- 5. Fiddler's Elbow (The Lanes - central) -->
+          <circle cx="270" cy="215" r="16" fill="#1A1209" stroke="#C8A951" stroke-width="2"/>
+          <text x="270" y="220" text-anchor="middle" fill="#C8A951" font-size="14" font-weight="900" font-family="Playfair Display, serif">5</text>
+          <text x="270" y="237" text-anchor="middle" fill="#F2E8D5" font-size="7" font-weight="600" font-family="Inter, sans-serif">Fiddler's Elbow</text>
+
+          <!-- Brighton label -->
+          <text x="240" y="285" text-anchor="middle" fill="#5a8a9a" font-size="10" font-weight="300" font-family="Inter, sans-serif" letter-spacing="4" opacity="0.5">B R I G H T O N</text>
+
+          <!-- Compass -->
+          <g transform="translate(40, 40)" opacity="0.4">
+            <circle cx="0" cy="0" r="12" fill="none" stroke="#C8A951" stroke-width="0.5"/>
+            <text x="0" y="-15" text-anchor="middle" fill="#C8A951" font-size="8" font-weight="600" font-family="Inter, sans-serif">N</text>
+            <line x1="0" y1="-10" x2="0" y2="10" stroke="#C8A951" stroke-width="0.5"/>
+            <line x1="-10" y1="0" x2="10" y2="0" stroke="#C8A951" stroke-width="0.5"/>
+          </g>
+        </svg>
+      </div>
+      <div class="map-overlay">
+        <div class="open-btn">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          Open full route in Google Maps
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <!-- ROUTE STATS -->
+  <div class="route-info">
+    <div class="route-stat">
+      <div class="value">5</div>
+      <div class="label">Pubs</div>
+    </div>
+    <div class="divider-dot"></div>
+    <div class="route-stat">
+      <div class="value">~38</div>
+      <div class="label">Min Walk</div>
+    </div>
+    <div class="divider-dot"></div>
+    <div class="route-stat">
+      <div class="value">5</div>
+      <div class="label">Pints</div>
+    </div>
+    <div class="divider-dot"></div>
+    <div class="route-stat">
+      <div class="value">&infin;</div>
+      <div class="label">Craic</div>
+    </div>
+  </div>
+
+  <!-- ROUTE TITLE -->
+  <div class="route-title">The Route</div>
+
+  <!-- PUB LIST -->
+  <div class="pub-list">
+
+    <!-- STOP 1: The Geese -->
+    <a class="pub-card"
+       href="https://www.google.com/maps/search/The+Geese+16+Southover+Street+Brighton+BN2+9UA"
+       target="_blank" rel="noopener noreferrer">
+      <div class="stop-marker">1</div>
+      <div class="pub-info">
+        <div class="pub-rank">Ranked #4 in Brighton</div>
+        <div class="pub-name">The Geese</div>
+        <div class="pub-vibe">Neighbourhood bangers &amp; mash pub</div>
+        <div class="pub-address">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          16 Southover Street, Brighton BN2 9UA
+        </div>
+        <span class="pub-tag tag-local">Neighbourhood Local</span>
+        <div class="open-maps-hint">
+          <svg viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+          Open in Google Maps
+        </div>
+      </div>
+    </a>
+
+    <div class="walk-segment">
+      <span class="walk-icon">&#128694;</span>
+      <span class="walk-text">~16 min walk southwest down to North Road</span>
+    </div>
+
+    <!-- STOP 2: Heart & Hand -->
+    <a class="pub-card"
+       href="https://www.google.com/maps/search/Heart+and+Hand+75+North+Road+Brighton+BN1+1YD"
+       target="_blank" rel="noopener noreferrer">
+      <div class="stop-marker">2</div>
+      <div class="pub-info">
+        <div class="pub-rank">Ranked #5 in Brighton</div>
+        <div class="pub-name">Heart &amp; Hand</div>
+        <div class="pub-vibe">Nostalgic, table service, resident pub cat</div>
+        <div class="pub-address">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          75 North Road, Brighton BN1 1YD
+        </div>
+        <span class="pub-tag tag-cosy">Resident Pub Cat &#128008;</span>
+        <div class="open-maps-hint">
+          <svg viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+          Open in Google Maps
+        </div>
+      </div>
+    </a>
+
+    <div class="walk-segment">
+      <span class="walk-icon">&#128694;</span>
+      <span class="walk-text">~7 min walk west to Dyke Road</span>
+    </div>
+
+    <!-- STOP 3: Alphabet -->
+    <a class="pub-card"
+       href="https://www.google.com/maps/search/Alphabet+pub+11+Dyke+Road+Brighton+BN1+3FE"
+       target="_blank" rel="noopener noreferrer">
+      <div class="stop-marker">3</div>
+      <div class="pub-info">
+        <div class="pub-rank">Ranked #2 in Brighton</div>
+        <div class="pub-name">Alphabet</div>
+        <div class="pub-vibe">Hidden gem, audio-led hi-fi pub</div>
+        <div class="pub-address">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          11 Dyke Road, Brighton BN1 3FE
+        </div>
+        <span class="pub-tag tag-gem">Hidden Gem</span>
+        <div class="open-maps-hint">
+          <svg viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+          Open in Google Maps
+        </div>
+      </div>
+    </a>
+
+    <div class="walk-segment">
+      <span class="walk-icon">&#128694;</span>
+      <span class="walk-text">~5 min walk southwest to Sillwood Street</span>
+    </div>
+
+    <!-- STOP 4: Lion & Lobster -->
+    <a class="pub-card"
+       href="https://www.google.com/maps/search/Lion+and+Lobster+24+Sillwood+Street+Brighton+BN1+2PS"
+       target="_blank" rel="noopener noreferrer">
+      <div class="stop-marker">4</div>
+      <div class="pub-info">
+        <div class="pub-rank">Ranked #3 in Brighton</div>
+        <div class="pub-name">Lion &amp; Lobster</div>
+        <div class="pub-vibe">Cosy, candle-lit, listed on the harp guide</div>
+        <div class="pub-address">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          24 Sillwood Street, Brighton BN1 2PS
+        </div>
+        <span class="pub-tag tag-harp">On the Harp Guide</span>
+        <div class="open-maps-hint">
+          <svg viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+          Open in Google Maps
+        </div>
+      </div>
+    </a>
+
+    <div class="walk-segment">
+      <span class="walk-icon">&#128694;</span>
+      <span class="walk-text">~8 min walk east into the Lanes</span>
+    </div>
+
+    <!-- STOP 5: Fiddler's Elbow -->
+    <a class="pub-card"
+       href="https://www.google.com/maps/search/Fiddlers+Elbow+11+Boyces+Street+Brighton+BN1+1AN"
+       target="_blank" rel="noopener noreferrer">
+      <div class="stop-marker">5</div>
+      <div class="pub-info">
+        <div class="pub-rank">Ranked #1 in Brighton</div>
+        <div class="pub-name">Fiddler's Elbow</div>
+        <div class="pub-vibe">Irish pub, &pound;5.65 creamers, on the harp guide</div>
+        <div class="pub-address">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          11 Boyce's Street, Brighton BN1 1AN
+        </div>
+        <span class="pub-tag tag-winner">&#127942; #1 Guinness in Brighton</span>
+        <div class="open-maps-hint">
+          <svg viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+          Open in Google Maps
+        </div>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- FULL ROUTE BUTTON -->
+  <a class="full-route-btn"
+     href="https://www.google.com/maps/dir/The+Geese,+16+Southover+Street,+Brighton+BN2+9UA/Heart+and+Hand,+75+North+Road,+Brighton+BN1+1YD/Alphabet,+11+Dyke+Road,+Brighton+BN1+3FE/Lion+%26+Lobster,+24+Sillwood+Street,+Brighton+BN1+2PS/Fiddler's+Elbow,+11+Boyces+Street,+Brighton+BN1+1AN/@50.826,-0.145,15z/data=!4m2!4m1!3e2"
+     target="_blank"
+     rel="noopener noreferrer">
+    <svg viewBox="0 0 24 24"><path d="M21.71 11.29l-9-9a.996.996 0 00-1.41 0l-9 9a.996.996 0 000 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 000-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/></svg>
+    Open Full Walking Route in Google Maps
+  </a>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <span class="pint-emoji">&#127866;&#127866;&#127866;</span>
+    <div class="cheers">Sl&aacute;inte!</div>
+    <div class="credit">Source: @picantegeorge on Instagram</div>
+  </div>
+
+</div>
+
+</body>
+</html>
