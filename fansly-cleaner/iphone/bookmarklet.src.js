@@ -2,42 +2,42 @@
  * Fansly message cleaner — iPhone / Safari bookmarklet (source)
  *
  * Deletes ALL of YOUR messages in the currently-open chat (no date filter).
- * In-page panel (iOS blocks prompt/confirm/alert). Buttons:
- *   Scan            – load history, count messages and how many are yours
- *   Delete all mine – (tap twice to confirm) delete your messages, oldest first
- *   Debug           – copy page structure to clipboard if something's off
- *   Close           – remove the panel
+ * Targets Fansly's real markup: message-wrapper elements, "margin-right"
+ * timestamp = your message.
  *
+ * Buttons: Scan | Delete all mine (two-tap) | Debug | Close
  * One-line version to paste into a bookmark: bookmarklet.txt
  */
 (async () => {
   "use strict";
 
   const SEL = {
-    scroll: "[class*='message-list'],[class*='messages'],[class*='thread'],[class*='conversation']",
-    message: "[class*='message-item'],[class*='chat-message'],[class*='message-bubble'],[class*='message']",
-    del: "button[aria-label*='delete' i],[title*='delete' i],[class*='delete'],[class*='trash']",
+    scroll: "[class*='message-collection-wrapper'],[class*='message-list'],[class*='messages'],[class*='thread'],[class*='conversation']",
+    message: "[class*='message-wrapper']",
+    del: "button[aria-label*='delete' i],button[aria-label*='unsend' i],[title*='delete' i],[class*='delete'],[class*='trash']",
     menu: "button[aria-label*='more' i],button[aria-label*='option' i],[class*='more-option'],[class*='msg-menu']"
   };
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const scroller = () => document.querySelector(SEL.scroll) || document.scrollingElement || document.body;
-  const inPanel = (el) => !!(el.closest && el.closest("#fc-panel"));
+  const inPanel = (el) => !!(el && el.closest && el.closest("#fc-panel"));
 
+  // Your message = timestamp aligned right ("margin-right"), or a right/own class.
   function isOwn(el) {
     if (inPanel(el)) return false;
     const cls = (el.className || "") + "";
     if (/\b(own|self|outgoing|sent|mine|owner)\b/i.test(cls)) return true;
+    if (el.querySelector("[class*='margin-right']")) return true;
+    if (el.querySelector("[class*='margin-left']")) return false;
     const sc = scroller().getBoundingClientRect();
     const r = el.getBoundingClientRect();
     if (r.width === 0) return false;
     return (r.left + r.width / 2) > (sc.left + sc.width / 2);
   }
 
-  // Find a button/menu item by text — never inside our own panel.
   function byText(words) {
-    const btns = [...document.querySelectorAll("button,[role='button'],a,[class*='menu-item'],[class*='menuitem'],li")];
-    for (const b of btns) {
+    const els = [...document.querySelectorAll("button,[role='button'],a,[class*='menu-item'],[class*='menuitem'],[class*='option'],[class*='action'],li")];
+    for (const b of els) {
       if (inPanel(b) || b.offsetParent === null) continue;
       const txt = (b.textContent || "").trim().toLowerCase();
       if (txt && txt.length < 24 && words.some(w => txt === w || txt.includes(w))) return b;
@@ -61,7 +61,6 @@
     try { el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true })); } catch (e) {}
   }
 
-  // Try hard to delete one message: hover reveal, tap-to-open-menu, long-press.
   async function deleteMsg(el) {
     try { el.scrollIntoView({ block: "center" }); } catch (e) {}
     await sleep(150);
@@ -69,22 +68,21 @@
     await sleep(150);
     let b = el.querySelector(SEL.del);
     if (!b) {
-      fire(el, "pointerdown"); fire(el, "mousedown");
-      fire(el, "pointerup"); fire(el, "mouseup");
+      fire(el, "pointerdown"); fire(el, "mousedown"); fire(el, "pointerup"); fire(el, "mouseup");
       try { el.click(); } catch (e) {}
-      await sleep(400);
-      b = el.querySelector(SEL.del) || byText(["delete"]);
+      await sleep(450);
+      b = el.querySelector(SEL.del) || byText(["delete", "unsend"]);
     }
     if (!b) {
       const m = el.querySelector(SEL.menu);
-      if (m) { try { m.click(); } catch (e) {} await sleep(400); b = el.querySelector(SEL.del) || byText(["delete"]); }
+      if (m) { try { m.click(); } catch (e) {} await sleep(450); b = el.querySelector(SEL.del) || byText(["delete", "unsend"]); }
     }
-    if (!b) { fire(el, "contextmenu"); await sleep(400); b = byText(["delete"]); }
+    if (!b) { fire(el, "contextmenu"); await sleep(450); b = byText(["delete", "unsend"]); }
     if (!b) return false;
     try { b.click(); } catch (e) { return false; }
-    await sleep(400);
-    const c = byText(["delete", "confirm", "yes", "remove"]);
-    if (c) { try { c.click(); } catch (e) {} await sleep(400); }
+    await sleep(450);
+    const c = byText(["delete", "unsend", "confirm", "yes", "remove"]);
+    if (c) { try { c.click(); } catch (e) {} await sleep(450); }
     return true;
   }
 
@@ -93,47 +91,39 @@
     const c = ((el.className || "") + "").trim().replace(/\s+/g, ".");
     return el.tagName.toLowerCase() + (c ? "." + c : "");
   }
+  function listButtons() {
+    let s = "", seen = new Set(), n = 0;
+    [...document.querySelectorAll("button,[role='button'],[class*='menu-item'],[class*='menuitem'],[class*='option'],[class*='action'],[aria-label],li")].forEach(b => {
+      if (inPanel(b) || b.offsetParent === null) return;
+      const lab = ((b.getAttribute && (b.getAttribute("aria-label") || b.getAttribute("title"))) || b.textContent || "").trim().replace(/\s+/g, " ").slice(0, 26);
+      if (!lab || seen.has(lab)) return; seen.add(lab);
+      if (n < 24) { s += " b:" + lab + "\n"; n++; }
+    });
+    return s || " (none)\n";
+  }
   async function diag() {
-    const cts = ["message-item", "chat-message", "message-bubble", "message-wrapper",
-      "message-row", "message-group", "message-content", "message", "chat"];
-    let out = "=FANSLY DIAG=\n";
-    cts.forEach(c => {
-      const els = [...document.querySelectorAll("[class*='" + c + "']")];
-      out += "*" + c + " " + els.length + " (own " + els.filter(isOwn).length + ")\n";
+    let out = "=DIAG2=\n";
+    const wr = [...document.querySelectorAll(SEL.message)];
+    out += "wrappers " + wr.length + " (own " + wr.filter(isOwn).length + ")\n";
+    const sample = wr.slice(0, 4).concat(wr.slice(-2));
+    sample.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      const ts = el.querySelector("[class*='margin-right'],[class*='margin-left']");
+      out += "#" + i + " " + classOf(el).slice(0, 46) + "\n";
+      out += "  L" + Math.round(r.left) + " W" + Math.round(r.width) + " ts:" + (ts ? classOf(ts).slice(0, 24) : "-") + "\n";
+      out += '  "' + (el.textContent || "").trim().slice(0, 28) + '"\n';
     });
-    const re = /\b\d{1,2}:\d{2}\b/;
-    const hits = [...document.querySelectorAll("span,div,time,small,p")].filter(el => {
-      const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("");
-      return re.test(own);
-    });
-    out += "time-els " + hits.length + "\n";
-    hits.slice(-2).forEach((el, i) => {
-      out += "[" + i + "] " + (el.textContent || "").trim().slice(0, 40) + "\n";
-      let a = el, lvl = 0;
-      while (a && lvl < 6) {
-        out += "  " + lvl + " " + classOf(a).slice(0, 58) + " w" + Math.round(a.getBoundingClientRect().width) + "\n";
-        a = a.parentElement; lvl++;
-      }
-    });
-    // Probe: tap the last message-ish element and list the menu options that appear.
-    out += "[menu probe]\n";
-    let tgt = null;
-    if (hits.length) {
-      let a = hits[hits.length - 1];
-      for (let i = 0; i < 6 && a; i++) { if (/message/i.test((a.className || "") + "")) { tgt = a; break; } a = a.parentElement; }
-      if (!tgt) tgt = hits[hits.length - 1].parentElement;
-    }
-    if (tgt) {
-      fire(tgt, "pointerover"); fire(tgt, "pointerdown"); fire(tgt, "pointerup"); try { tgt.click(); } catch (e) {}
-      await sleep(500);
-      const seen = new Set(); let n = 0;
-      [...document.querySelectorAll("button,[role='button'],[class*='menu-item'],[class*='option'],[aria-label]")].forEach(b => {
-        if (inPanel(b) || b.offsetParent === null) return;
-        const lab = ((b.getAttribute && (b.getAttribute("aria-label") || b.getAttribute("title"))) || b.textContent || "").trim().slice(0, 26);
-        if (!lab || seen.has(lab)) return; seen.add(lab);
-        if (n < 20) { out += "  b:" + lab + "\n"; n++; }
-      });
-    } else out += "  (no target)\n";
+    out += "[tap probe]\n";
+    const t = wr[wr.length - 1];
+    if (t) {
+      ["pointerover", "pointerdown", "pointerup", "mousedown", "mouseup"].forEach(ev => fire(t, ev));
+      try { t.click(); } catch (e) {}
+      await sleep(600);
+      out += listButtons();
+      out += "[longpress probe]\n";
+      fire(t, "contextmenu"); await sleep(600);
+      out += listButtons();
+    } else out += " no wrapper\n";
     return out;
   }
 
@@ -176,7 +166,7 @@
     await scrollToTop();
     const msgs = [...document.querySelectorAll(SEL.message)];
     const mine = msgs.filter(isOwn).length;
-    status("Loaded: " + msgs.length + "\nYours (estimate): " + mine +
+    status("This chat — messages: " + msgs.length + "\nYours: " + mine +
       "\n\nTap ‘Delete all mine’ to remove YOUR messages. It stops on its own when none remain.");
     q("#fc-scan").disabled = false;
     q("#fc-del").style.display = "";
@@ -195,9 +185,8 @@
     q("#fc-del").textContent = "Deleting…";
     q("#fc-del").disabled = true; q("#fc-scan").disabled = true;
 
-    let done = 0, noProgressPasses = 0;
-    const maxPasses = 2000;
-    for (let pass = 0; pass < maxPasses; pass++) {
+    let done = 0, noProg = 0;
+    for (let pass = 0; pass < 2000; pass++) {
       await scrollToTop();
       const owns = [...document.querySelectorAll(SEL.message)].filter(isOwn);
       if (!owns.length) break;
@@ -210,16 +199,14 @@
         const after = document.querySelectorAll(SEL.message).length;
         if (ok && after < before) { done++; progressed = true; status("Deleted " + done + "…"); break; }
       }
-      if (progressed) noProgressPasses = 0;
-      else if (++noProgressPasses >= 2) {
-        status("Stopped after deleting " + done + ".\nAny left may not have a delete option, or the button couldn't be found. Tap Debug and send it over.");
-        q("#fc-del").disabled = false; q("#fc-scan").disabled = false;
-        q("#fc-del").textContent = "Delete all mine";
+      if (progressed) noProg = 0;
+      else if (++noProg >= 2) {
+        status("Stopped after deleting " + done + ".\nRemaining ones' delete option wasn't found — tap Debug and send it.");
+        q("#fc-del").disabled = false; q("#fc-scan").disabled = false; q("#fc-del").textContent = "Delete all mine";
         return;
       }
     }
     status("Done. Deleted " + done + " message(s).");
-    q("#fc-del").disabled = false; q("#fc-scan").disabled = false;
-    q("#fc-del").textContent = "Delete all mine";
+    q("#fc-del").disabled = false; q("#fc-scan").disabled = false; q("#fc-del").textContent = "Delete all mine";
   });
 })();
