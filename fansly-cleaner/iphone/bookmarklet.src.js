@@ -19,6 +19,17 @@
   };
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // Poll fn() until it returns something truthy or timeout — lets us react the
+  // instant the UI changes instead of waiting fixed delays (much faster).
+  async function waitFor(fn, timeout, interval) {
+    const start = Date.now();
+    for (;;) {
+      let v; try { v = fn(); } catch (e) { v = null; }
+      if (v) return v;
+      if (Date.now() - start >= timeout) return null;
+      await sleep(interval || 60);
+    }
+  }
   const scroller = () => document.querySelector(SEL.scroll) || document.scrollingElement || document.body;
   const inPanel = (el) => !!(el && el.closest && el.closest("#fc-panel"));
 
@@ -95,32 +106,23 @@
 
   async function deleteMsg(el) {
     try { el.scrollIntoView({ block: "center" }); } catch (e) {}
-    await sleep(150);
-    fire(el, "pointerover"); fire(el, "mouseover"); fire(el, "mousemove");
-    await sleep(150);
-    let b = el.querySelector(SEL.del);
-    if (!b) {
-      fire(el, "pointerdown"); fire(el, "mousedown"); fire(el, "pointerup"); fire(el, "mouseup");
-      try { el.click(); } catch (e) {}
-      await sleep(450);
-      b = el.querySelector(SEL.del) || byText(["delete", "unsend"]);
-    }
+    // Open the message's menu (tap + hover) and wait for a Delete/Unsend option.
+    fire(el, "pointerover"); fire(el, "mouseover");
+    fire(el, "pointerdown"); fire(el, "mousedown"); fire(el, "pointerup"); fire(el, "mouseup");
+    try { el.click(); } catch (e) {}
+    let b = await waitFor(() => el.querySelector(SEL.del) || byText(["delete", "unsend"]), 1000, 60);
     if (!b) {
       const m = el.querySelector(SEL.menu);
-      if (m) { try { m.click(); } catch (e) {} await sleep(450); b = el.querySelector(SEL.del) || byText(["delete", "unsend"]); }
+      if (m) { try { m.click(); } catch (e) {} b = await waitFor(() => el.querySelector(SEL.del) || byText(["delete", "unsend"]), 700, 60); }
     }
-    if (!b) { fire(el, "contextmenu"); await sleep(450); b = byText(["delete", "unsend"]); }
+    if (!b) { fire(el, "contextmenu"); b = await waitFor(() => byText(["delete", "unsend"]), 700, 60); }
     if (!b) return false;
     try { b.click(); } catch (e) { return false; }
-
-    // Handle the "Are you sure?" confirmation: poll up to ~4s for its Yes button.
-    for (let k = 0; k < 13; k++) {
-      if (!el.isConnected) return true;            // deleted without a confirm
-      const c = confirmBtn();
-      if (c) { try { c.click(); } catch (e) {} await sleep(600); return true; }
-      await sleep(300);
-    }
-    return true;
+    // Click the "Are you sure?" Yes as soon as it appears (or stop if already gone).
+    const c = await waitFor(() => (!el.isConnected ? "GONE" : confirmBtn()), 1500, 60);
+    if (c && c !== "GONE") { try { c.click(); } catch (e) {} }
+    await waitFor(() => !el.isConnected, 1500, 60);
+    return !el.isConnected;
   }
 
   function classOf(el) {
@@ -222,37 +224,35 @@
     q("#fc-del").textContent = "Deleting…";
     q("#fc-del").disabled = true; q("#fc-scan").disabled = true;
 
-    await scrollToTop();          // load history once, not every pass (that caused the jumping)
-    let done = 0, noProg = 0;
-    for (let pass = 0; pass < 5000; pass++) {
-      let owns = [...document.querySelectorAll(SEL.message)].filter(isOwn);
-      if (!owns.length) {
-        // none rendered — nudge scroll up to load/render older messages
-        const sc = scroller();
-        sc.scrollTop = Math.max(0, sc.scrollTop - 2500);
-        await sleep(700);
-        owns = [...document.querySelectorAll(SEL.message)].filter(isOwn);
-        if (!owns.length) { sc.scrollTop = 0; await sleep(700); owns = [...document.querySelectorAll(SEL.message)].filter(isOwn); }
-        if (!owns.length) break;
+    // Delete the bottom-most of your messages (usually already in view), then
+    // the next, etc. Only scroll up to load older ones when none are left in view.
+    let done = 0, stuck = 0;
+    for (let guard = 0; guard < 20000; guard++) {
+      const owns = [...document.querySelectorAll(SEL.message)].filter(isOwn);
+      let deleted = false;
+      if (owns.length) {
+        for (let k = owns.length - 1, tries = 0; k >= 0 && tries < 4; k--, tries++) {
+          const before = document.querySelectorAll(SEL.message).length;
+          await deleteMsg(owns[k]);
+          if (modalOpen()) await dismiss();
+          if (document.querySelectorAll(SEL.message).length < before) { done++; deleted = true; status("Deleted " + done + "…"); break; }
+        }
       }
-      let progressed = false, attempts = 0;
-      for (const el of owns) {
-        if (attempts++ >= 8) break;
-        const before = document.querySelectorAll(SEL.message).length;
-        await deleteMsg(el);
-        await dismiss();
-        await sleep(350);
-        const after = document.querySelectorAll(SEL.message).length;
-        if (after < before) { done++; progressed = true; status("Deleted " + done + "…"); break; }
-      }
-      if (progressed) noProg = 0;
-      else if (++noProg >= 3) {
-        status("Stopped after deleting " + done + ".\nRemaining ones couldn't be deleted — tell the assistant the exact text on the confirm popup's button.");
-        q("#fc-del").disabled = false; q("#fc-scan").disabled = false; q("#fc-del").textContent = "Delete all mine";
-        return;
+      if (deleted) { stuck = 0; continue; }
+      // Nothing deletable in view — try to load older messages.
+      const sc = scroller();
+      const beforeH = sc.scrollHeight;
+      sc.scrollTop = 0;
+      await sleep(550);
+      if (sc.scrollHeight !== beforeH) { stuck = 0; continue; }   // new history loaded, retry
+      if (++stuck >= 2) {
+        const left = [...document.querySelectorAll(SEL.message)].filter(isOwn).length;
+        status(left
+          ? "Stopped after " + done + ". " + left + " of your messages couldn't be deleted — tell the assistant the exact text on the confirm popup's button."
+          : "Done. Deleted " + done + " message(s).");
+        break;
       }
     }
-    status("Done. Deleted " + done + " message(s).");
     q("#fc-del").disabled = false; q("#fc-scan").disabled = false; q("#fc-del").textContent = "Delete all mine";
   });
 })();
