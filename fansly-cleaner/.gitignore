@@ -1,0 +1,8 @@
+# Persistent browser login profile — NEVER commit this (contains your session)
+browser-profile/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

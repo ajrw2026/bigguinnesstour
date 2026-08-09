@@ -1,0 +1,29 @@
+{
+  "_comment": "CSS selectors used to drive the Fansly web UI. These are BEST-GUESS defaults. Fansly changes its markup, so if the dry-run reports 0 messages or misdetects your own messages/dates, run with --inspect and fix the values here. Each entry may contain several comma-separated candidates; the first one that matches wins. See README.md > 'Fixing selectors'.",
+
+  "messages_url": "https://fansly.com/messages",
+
+  "logged_in_indicator": "a[href*='/messages'], a[href*='/account'], [class*='navigation'] img",
+
+  "conversation_item": "a[href*='/messages/'], [class*='conversation'], [class*='chat-list-item'], [class*='message-preview']",
+
+  "chat_header": "[class*='chat-header'], [class*='conversation-header'], header [class*='display-name'], [class*='thread-header']",
+
+  "scroll_container": "[class*='message-list'], [class*='messages-container'], [class*='conversation'] [class*='scroll'], .messages",
+
+  "message": "[class*='message-item'], app-message, [class*='chat-message'], .message",
+
+  "own_message": "[class*='message-item'][class*='own'], [class*='message'][class*='self'], [class*='is-owner'], [class*='sent'][class*='message'], [class*='message'][class*='outgoing']",
+
+  "timestamp": "time, [datetime], [title], [aria-label], [class*='timestamp'], [class*='msg-time'], [class*='time']",
+
+  "date_separator": "[class*='date-separator'], [class*='day-separator'], [class*='date-divider'], [class*='date-header']",
+
+  "delete_button": "button[aria-label*='Delete' i], [title*='Delete' i], button[class*='delete'], [class*='trash'], [class*='icon-delete']",
+
+  "menu_button": "button[aria-label*='More' i], button[aria-label*='Options' i], [class*='message'] [class*='menu'], [class*='more-options']",
+
+  "delete_menu_item": "text=/^\\s*Delete\\s*$/i",
+
+  "confirm_button": "button:has-text('Delete'), button:has-text('Confirm'), button:has-text('Yes'), [class*='modal'] button[class*='danger']"
+}
