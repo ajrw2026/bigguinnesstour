@@ -84,6 +84,15 @@
     return cand[0] || null;
   }
 
+  function modalOpen() {
+    return [...document.querySelectorAll("[role='dialog'],[role='alertdialog'],[class*='modal'],[class*='overlay'],[class*='popup']")]
+      .some(e => !inPanel(e) && e.offsetParent !== null);
+  }
+  async function dismiss() {
+    try { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); } catch (e) {}
+    for (let i = 0; i < 8; i++) { if (!modalOpen()) return; await sleep(250); }
+  }
+
   async function deleteMsg(el) {
     try { el.scrollIntoView({ block: "center" }); } catch (e) {}
     await sleep(150);
@@ -213,23 +222,32 @@
     q("#fc-del").textContent = "Deleting…";
     q("#fc-del").disabled = true; q("#fc-scan").disabled = true;
 
+    await scrollToTop();          // load history once, not every pass (that caused the jumping)
     let done = 0, noProg = 0;
-    for (let pass = 0; pass < 2000; pass++) {
-      await scrollToTop();
-      const owns = [...document.querySelectorAll(SEL.message)].filter(isOwn);
-      if (!owns.length) break;
+    for (let pass = 0; pass < 5000; pass++) {
+      let owns = [...document.querySelectorAll(SEL.message)].filter(isOwn);
+      if (!owns.length) {
+        // none rendered — nudge scroll up to load/render older messages
+        const sc = scroller();
+        sc.scrollTop = Math.max(0, sc.scrollTop - 2500);
+        await sleep(700);
+        owns = [...document.querySelectorAll(SEL.message)].filter(isOwn);
+        if (!owns.length) { sc.scrollTop = 0; await sleep(700); owns = [...document.querySelectorAll(SEL.message)].filter(isOwn); }
+        if (!owns.length) break;
+      }
       let progressed = false, attempts = 0;
       for (const el of owns) {
-        if (attempts++ >= 20) break;
+        if (attempts++ >= 8) break;
         const before = document.querySelectorAll(SEL.message).length;
-        const ok = await deleteMsg(el);
-        await sleep(500);
+        await deleteMsg(el);
+        await dismiss();
+        await sleep(350);
         const after = document.querySelectorAll(SEL.message).length;
-        if (ok && after < before) { done++; progressed = true; status("Deleted " + done + "…"); break; }
+        if (after < before) { done++; progressed = true; status("Deleted " + done + "…"); break; }
       }
       if (progressed) noProg = 0;
-      else if (++noProg >= 2) {
-        status("Stopped after deleting " + done + ".\nRemaining ones' delete option wasn't found — tap Debug and send it.");
+      else if (++noProg >= 3) {
+        status("Stopped after deleting " + done + ".\nRemaining ones couldn't be deleted — tell the assistant the exact text on the confirm popup's button.");
         q("#fc-del").disabled = false; q("#fc-scan").disabled = false; q("#fc-del").textContent = "Delete all mine";
         return;
       }
