@@ -18,7 +18,22 @@ read are **skipped and reported**, never deleted.
 
 ---
 
-## Setup
+## Easiest way (no terminal)
+
+Download this folder to your own computer, then **double-click**:
+
+- **macOS:** `run-macos.command` (first time, if blocked: right-click → Open)
+- **Windows:** `run-windows.bat`
+
+It sets everything up on first run and launches the bot. You just need
+[Python](https://www.python.org/downloads/) installed first (on Windows, tick
+"Add Python to PATH" during install).
+
+> This must run on **your own computer** — it can't run inside a Claude chat
+> session, which is sandboxed with no browser window, no saved login, and no
+> network access to Fansly.
+
+## Setup (manual)
 
 You need Python 3.9+.
 
