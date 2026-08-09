@@ -2,16 +2,18 @@
  * Fansly message cleaner — iPhone / Safari bookmarklet (source)
  *
  * Runs inside your own logged-in Fansly tab. Open the chat you want to clean,
- * then tap the bookmark. It previews what it found, asks you to confirm, then
- * deletes YOUR messages oldest-first up to a cutoff date.
+ * then tap the bookmark. A small panel appears IN the page (iOS blocks the
+ * usual popups, so everything is on-screen buttons):
+ *   1. Pick a cutoff date.
+ *   2. Tap "Preview" — it loads history and shows what it found. Nothing is
+ *      deleted yet.
+ *   3. Tap "Delete N" to delete YOUR messages oldest-first up to that date.
  *
- * This is the readable source. The one-line version to paste into a bookmark
- * is in bookmarklet.txt (built from this file).
+ * The one-line version to paste into a bookmark is bookmarklet.txt.
  */
 (async () => {
   "use strict";
 
-  // ---- Selectors (broad on purpose; edit if the preview finds nothing) ----
   const SEL = {
     scroll: "[class*='message-list'],[class*='messages'],[class*='thread'],[class*='conversation']",
     message: "[class*='message-item'],[class*='chat-message'],[class*='message-bubble'],[class*='message']",
@@ -22,22 +24,8 @@
   };
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-  // ---- On-screen status box (iPhone has no console) ----
-  let box = document.getElementById("fc-box");
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "fc-box";
-    box.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;" +
-      "background:#1a1209;color:#f2e8d5;font:14px -apple-system,sans-serif;padding:12px 14px;" +
-      "border:1px solid #c8a951;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:pre-wrap;";
-    document.body.appendChild(box);
-  }
-  const say = (m) => { box.textContent = m; };
-
   const scroller = () => document.querySelector(SEL.scroll) || document.scrollingElement || document.body;
 
-  // ---- Is this message MINE? class hint first, then right-side geometry ----
   function isOwn(el) {
     const cls = (el.className || "") + "";
     if (/\b(own|self|outgoing|sent|mine|owner)\b/i.test(cls)) return true;
@@ -47,7 +35,6 @@
     return (r.left + r.width / 2) > (sc.left + sc.width / 2);
   }
 
-  // ---- Date for a message: timestamp attr, else nearest date separator above ----
   function dateOf(el) {
     const t = el.querySelector(SEL.time);
     if (t) {
@@ -72,9 +59,7 @@
     const btns = [...document.querySelectorAll("button,[role='button'],a,[class*='menu-item']")];
     for (const b of btns) {
       const txt = (b.textContent || "").trim().toLowerCase();
-      if (txt && words.some(w => txt === w || txt.includes(w))) {
-        if (b.offsetParent !== null) return b;
-      }
+      if (txt && words.some(w => txt === w || txt.includes(w)) && b.offsetParent !== null) return b;
     }
     return null;
   }
@@ -114,56 +99,79 @@
     return true;
   }
 
-  // ---- Ask for cutoff date ----
-  const prev = localStorage.getItem("fcCutoff") || "";
-  const raw = prompt("Delete YOUR messages up to and INCLUDING which date?\n(YYYY-MM-DD)", prev);
-  if (!raw) { say("Cancelled."); return; }
-  const cutoff = new Date(raw + "T23:59:59");
-  if (isNaN(cutoff)) { alert("Couldn't read that date. Use YYYY-MM-DD."); return; }
-  localStorage.setItem("fcCutoff", raw);
+  // ---- Build the in-page control panel (no prompt/confirm/alert; iOS blocks them) ----
+  const old = document.getElementById("fc-panel");
+  if (old) old.remove();
 
-  say("Loading chat history…");
-  await scrollToTop();
+  const panel = document.createElement("div");
+  panel.id = "fc-panel";
+  panel.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;" +
+    "background:#1a1209;color:#f2e8d5;font:15px -apple-system,sans-serif;padding:14px;" +
+    "border:1px solid #c8a951;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.6);";
+  const btn = "flex:1;min-width:90px;padding:12px;border-radius:8px;border:0;font:600 15px -apple-system,sans-serif;";
+  panel.innerHTML =
+    "<div style='font-weight:700;margin-bottom:8px;'>Fansly cleaner</div>" +
+    "<div style='font-size:13px;margin-bottom:4px;'>Delete my messages on/before:</div>" +
+    "<input id='fc-date' type='date' style='width:100%;padding:10px;border-radius:8px;border:1px solid #c8a951;background:#2b1a0e;color:#f2e8d5;font-size:16px;box-sizing:border-box;'>" +
+    "<div id='fc-status' style='margin:10px 0;font-size:13px;white-space:pre-wrap;min-height:18px;'></div>" +
+    "<div style='display:flex;gap:8px;'>" +
+      "<button id='fc-preview' style='" + btn + "background:#c8a951;color:#1a1209;'>Preview</button>" +
+      "<button id='fc-delete' style='" + btn + "background:#6b1c23;color:#fff;display:none;'>Delete</button>" +
+      "<button id='fc-close' style='" + btn + "background:#3d2817;color:#f2e8d5;'>Close</button>" +
+    "</div>";
+  document.body.appendChild(panel);
 
-  // ---- Preview ----
-  let msgs = [...document.querySelectorAll(SEL.message)];
-  const mine = msgs.filter(isOwn);
-  const target = mine.filter(el => { const d = dateOf(el); return d && d <= cutoff; });
-  const unknown = mine.filter(el => !dateOf(el)).length;
+  const q = (id) => panel.querySelector(id);
+  const status = (m) => { q("#fc-status").textContent = m; };
+  const dateInput = q("#fc-date");
+  dateInput.value = localStorage.getItem("fcCutoff") || "";
 
-  if (!confirm(
-    "Found in this chat:\n" +
-    "• messages loaded: " + msgs.length + "\n" +
-    "• yours: " + mine.length + "\n" +
-    "• yours on/before " + raw + ": " + target.length + "  (will delete)\n" +
-    (unknown ? "• yours, date unknown: " + unknown + " (skipped)\n" : "") +
-    "\nTap OK to DELETE them (permanent). Cancel to stop."
-  )) { say("Cancelled — nothing deleted."); return; }
+  let cutoff = null, target = [];
 
-  if (target.length === 0) {
-    alert("Nothing matched. If you know there are messages here, the selectors need tweaking — tell the assistant these numbers.");
-    say("Nothing to delete.");
-    return;
-  }
+  q("#fc-close").addEventListener("click", () => panel.remove());
 
-  // ---- Delete loop: always the earliest qualifying, rescan each time ----
-  let done = 0, stuck = 0;
-  const cap = target.length * 3 + 20;
-  for (let i = 0; i < cap; i++) {
+  q("#fc-preview").addEventListener("click", async () => {
+    const raw = dateInput.value;
+    if (!raw) { status("Pick a date first."); return; }
+    localStorage.setItem("fcCutoff", raw);
+    cutoff = new Date(raw + "T23:59:59");
+    q("#fc-preview").disabled = true;
+    status("Loading history…");
     await scrollToTop();
-    const list = [...document.querySelectorAll(SEL.message)];
-    let el = null;
-    for (const m of list) {
-      const d = dateOf(m);
-      if (d && d > cutoff) break;         // reached messages after cutoff
-      if (isOwn(m) && d && d <= cutoff) { el = m; break; }
-    }
-    if (!el) break;
-    const ok = await deleteMsg(el);
-    if (ok) { done++; stuck = 0; say("Deleting… " + done + "/" + target.length); await sleep(700); }
-    else { if (++stuck >= 3) { alert("Couldn't find the delete control. Tell the assistant so the selectors can be fixed."); break; } }
-  }
+    const msgs = [...document.querySelectorAll(SEL.message)];
+    const mine = msgs.filter(isOwn);
+    target = mine.filter(el => { const d = dateOf(el); return d && d <= cutoff; });
+    const unknown = mine.filter(el => !dateOf(el)).length;
+    status("Loaded: " + msgs.length + "\nYours: " + mine.length +
+      "\nWill delete (on/before " + raw + "): " + target.length +
+      (unknown ? "\nUnknown date, skipped: " + unknown : ""));
+    q("#fc-preview").disabled = false;
+    const db = q("#fc-delete");
+    if (target.length) { db.style.display = ""; db.textContent = "Delete " + target.length; }
+    else db.style.display = "none";
+  });
 
-  say("Done. Deleted " + done + " message(s).");
-  alert("Done. Deleted " + done + " message(s)." + (done < target.length ? "\nRun again to continue." : ""));
+  q("#fc-delete").addEventListener("click", async () => {
+    if (!cutoff || !target.length) return;
+    q("#fc-delete").disabled = true;
+    q("#fc-preview").disabled = true;
+    let done = 0, stuck = 0;
+    const cap = target.length * 3 + 20;
+    for (let i = 0; i < cap; i++) {
+      await scrollToTop();
+      const list = [...document.querySelectorAll(SEL.message)];
+      let el = null;
+      for (const m of list) {
+        const d = dateOf(m);
+        if (d && d > cutoff) break;
+        if (isOwn(m) && d && d <= cutoff) { el = m; break; }
+      }
+      if (!el) break;
+      if (await deleteMsg(el)) { done++; stuck = 0; status("Deleting… " + done + "/" + target.length); await sleep(700); }
+      else if (++stuck >= 3) { status("Stuck — couldn't find the delete control 3x. Tell the assistant."); break; }
+    }
+    status("Done. Deleted " + done + " message(s)." + (done < target.length ? "\nTap Preview, then Delete, to continue." : ""));
+    q("#fc-delete").disabled = false;
+    q("#fc-preview").disabled = false;
+  });
 })();
