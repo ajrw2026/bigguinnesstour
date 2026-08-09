@@ -61,6 +61,29 @@
     try { el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true })); } catch (e) {}
   }
 
+  // Find the "Yes/Confirm/Delete" button in an "Are you sure?" dialog.
+  // Searches modal/overlay scopes first and includes styled <div>/<span>
+  // buttons; never clicks Cancel/No/Keep.
+  function confirmBtn() {
+    const words = ["yes", "confirm", "delete", "unsend", "remove", "ok"];
+    const bad = /cancel|keep|don.?t|never|not now|no\b/i;
+    const scopeSel = "[class*='modal'],[class*='dialog'],[role='dialog'],[role='alertdialog'],[class*='overlay'],[class*='confirm'],[class*='popup'],[class*='alert']";
+    const cand = [];
+    const collect = (root) => {
+      root.querySelectorAll("button,[role='button'],a,[class*='btn'],[class*='button'],[class*='action'],[class*='confirm'],span,div").forEach(b => {
+        if (inPanel(b) || b.offsetParent === null) return;
+        const t = (b.textContent || "").trim();
+        if (!t || t.length > 16 || bad.test(t)) return;
+        const low = t.toLowerCase();
+        if (words.some(w => low === w || low.startsWith(w))) cand.push(b);
+      });
+    };
+    [...document.querySelectorAll(scopeSel)].filter(e => !inPanel(e) && e.offsetParent !== null).forEach(collect);
+    if (!cand.length) collect(document);
+    cand.sort((a, b) => a.textContent.trim().length - b.textContent.trim().length);
+    return cand[0] || null;
+  }
+
   async function deleteMsg(el) {
     try { el.scrollIntoView({ block: "center" }); } catch (e) {}
     await sleep(150);
@@ -80,9 +103,14 @@
     if (!b) { fire(el, "contextmenu"); await sleep(450); b = byText(["delete", "unsend"]); }
     if (!b) return false;
     try { b.click(); } catch (e) { return false; }
-    await sleep(450);
-    const c = byText(["delete", "unsend", "confirm", "yes", "remove"]);
-    if (c) { try { c.click(); } catch (e) {} await sleep(450); }
+
+    // Handle the "Are you sure?" confirmation: poll up to ~4s for its Yes button.
+    for (let k = 0; k < 13; k++) {
+      if (!el.isConnected) return true;            // deleted without a confirm
+      const c = confirmBtn();
+      if (c) { try { c.click(); } catch (e) {} await sleep(600); return true; }
+      await sleep(300);
+    }
     return true;
   }
 
