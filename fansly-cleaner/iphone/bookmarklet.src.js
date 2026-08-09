@@ -1,15 +1,13 @@
 /*
  * Fansly message cleaner — iPhone / Safari bookmarklet (source)
  *
- * Runs inside your own logged-in Fansly tab. Open the chat you want to clean,
- * then tap the bookmark. A small panel appears IN the page (iOS blocks the
- * usual popups, so everything is on-screen buttons):
- *   1. Pick a cutoff date.
- *   2. Tap "Preview" — it loads history and shows what it found. Nothing is
- *      deleted yet.
- *   3. Tap "Delete N" to delete YOUR messages oldest-first up to that date.
+ * In-page panel (iOS blocks prompt/confirm/alert). Buttons:
+ *   Debug   – dump the page structure to the clipboard so selectors can be fixed
+ *   Preview – load history, show what WOULD be deleted (nothing yet)
+ *   Delete  – delete YOUR messages oldest-first up to the chosen date
+ *   Close   – remove the panel
  *
- * The one-line version to paste into a bookmark is bookmarklet.txt.
+ * One-line version to paste into a bookmark: bookmarklet.txt
  */
 (async () => {
   "use strict";
@@ -99,7 +97,38 @@
     return true;
   }
 
-  // ---- Build the in-page control panel (no prompt/confirm/alert; iOS blocks them) ----
+  // ---- Diagnostic: describe the page so selectors/date-parsing can be fixed ----
+  function classOf(el) {
+    if (!el) return "-";
+    const c = ((el.className || "") + "").trim().replace(/\s+/g, ".");
+    return el.tagName.toLowerCase() + (c ? "." + c : "");
+  }
+  function diag() {
+    const cands = ["message-item", "chat-message", "message-bubble", "message-wrapper",
+      "message-row", "message-group", "message-content", "message"];
+    let out = "=== FANSLY DIAGNOSTIC ===\npath " + location.pathname + "\n[class counts]\n";
+    cands.forEach(c => { out += " *" + c + ": " + document.querySelectorAll("[class*='" + c + "']").length + "\n"; });
+    const re = /\b\d{1,2}:\d{2}\b/;
+    const all = [...document.querySelectorAll("span,div,time,small,p")];
+    const hits = all.filter(el => {
+      const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("");
+      return re.test(own);
+    });
+    out += "[time-like text els] " + hits.length + "\n";
+    hits.slice(-4).forEach(el => {
+      out += "• " + classOf(el) + ' t="' + (el.textContent || "").trim().slice(0, 50) + '"\n';
+      ["datetime", "title", "aria-label"].forEach(a => {
+        const v = el.getAttribute && el.getAttribute(a);
+        if (v) out += "   @" + a + "=" + v.slice(0, 50) + "\n";
+      });
+      out += "   ^ " + classOf(el.parentElement) + "\n";
+      out += "   ^^ " + classOf(el.parentElement && el.parentElement.parentElement) + "\n";
+      out += "   ^^^ " + classOf(el.parentElement && el.parentElement.parentElement && el.parentElement.parentElement.parentElement) + "\n";
+    });
+    return out;
+  }
+
+  // ---- Build the in-page control panel ----
   const old = document.getElementById("fc-panel");
   if (old) old.remove();
 
@@ -108,13 +137,14 @@
   panel.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;" +
     "background:#1a1209;color:#f2e8d5;font:15px -apple-system,sans-serif;padding:14px;" +
     "border:1px solid #c8a951;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.6);";
-  const btn = "flex:1;min-width:90px;padding:12px;border-radius:8px;border:0;font:600 15px -apple-system,sans-serif;";
+  const btn = "flex:1;min-width:70px;padding:12px;border-radius:8px;border:0;font:600 15px -apple-system,sans-serif;";
   panel.innerHTML =
     "<div style='font-weight:700;margin-bottom:8px;'>Fansly cleaner</div>" +
     "<div style='font-size:13px;margin-bottom:4px;'>Delete my messages on/before:</div>" +
     "<input id='fc-date' type='date' style='width:100%;padding:10px;border-radius:8px;border:1px solid #c8a951;background:#2b1a0e;color:#f2e8d5;font-size:16px;box-sizing:border-box;'>" +
-    "<div id='fc-status' style='margin:10px 0;font-size:13px;white-space:pre-wrap;min-height:18px;'></div>" +
+    "<div id='fc-status' style='margin:10px 0;font-size:12px;white-space:pre-wrap;max-height:40vh;overflow:auto;'></div>" +
     "<div style='display:flex;gap:8px;'>" +
+      "<button id='fc-debug' style='" + btn + "background:#3d2817;color:#f2e8d5;'>Debug</button>" +
       "<button id='fc-preview' style='" + btn + "background:#c8a951;color:#1a1209;'>Preview</button>" +
       "<button id='fc-delete' style='" + btn + "background:#6b1c23;color:#fff;display:none;'>Delete</button>" +
       "<button id='fc-close' style='" + btn + "background:#3d2817;color:#f2e8d5;'>Close</button>" +
@@ -129,6 +159,15 @@
   let cutoff = null, target = [];
 
   q("#fc-close").addEventListener("click", () => panel.remove());
+
+  q("#fc-debug").addEventListener("click", async () => {
+    status("Loading a bit of history for the probe…");
+    await scrollToTop();
+    const text = diag();
+    status(text);
+    try { await navigator.clipboard.writeText(text); status("COPIED to clipboard — paste it to the assistant.\n\n" + text); }
+    catch (e) { status("(Couldn't auto-copy — screenshot this)\n\n" + text); }
+  });
 
   q("#fc-preview").addEventListener("click", async () => {
     const raw = dateInput.value;
@@ -168,7 +207,7 @@
       }
       if (!el) break;
       if (await deleteMsg(el)) { done++; stuck = 0; status("Deleting… " + done + "/" + target.length); await sleep(700); }
-      else if (++stuck >= 3) { status("Stuck — couldn't find the delete control 3x. Tell the assistant."); break; }
+      else if (++stuck >= 3) { status("Stuck — couldn't find the delete control 3x. Tap Debug and send it over."); break; }
     }
     status("Done. Deleted " + done + " message(s)." + (done < target.length ? "\nTap Preview, then Delete, to continue." : ""));
     q("#fc-delete").disabled = false;
