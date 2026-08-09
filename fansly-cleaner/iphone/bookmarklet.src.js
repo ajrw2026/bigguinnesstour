@@ -38,12 +38,19 @@
     if (inPanel(el)) return false;
     const cls = (el.className || "") + "";
     if (/\b(own|self|outgoing|sent|mine|owner)\b/i.test(cls)) return true;
-    if (el.querySelector("[class*='margin-right']")) return true;
-    if (el.querySelector("[class*='margin-left']")) return false;
-    const sc = scroller().getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    if (r.width === 0) return false;
-    return (r.left + r.width / 2) > (sc.left + sc.width / 2);
+    const wrap = el.getBoundingClientRect();
+    if (wrap.width === 0) return false;
+    // Find the message bubble (largest child that isn't full-width); your
+    // messages are right-aligned, the other person's are left-aligned.
+    let best = null, bestArea = 0;
+    el.querySelectorAll("div,span,p").forEach(ch => {
+      const r = ch.getBoundingClientRect();
+      if (r.width < 24 || r.width > wrap.width * 0.9 || r.height === 0) return;
+      const area = r.width * r.height;
+      if (area > bestArea) { bestArea = area; best = r; }
+    });
+    const ref = best || wrap;
+    return (ref.left + ref.width / 2) > (wrap.left + wrap.width / 2) + 4;
   }
 
   function byText(words) {
@@ -51,7 +58,7 @@
     for (const b of els) {
       if (inPanel(b) || b.offsetParent === null) continue;
       const txt = (b.textContent || "").trim().toLowerCase();
-      if (txt && txt.length < 24 && words.some(w => txt === w || txt.includes(w))) return b;
+      if (txt && txt.length < 60 && words.some(w => txt === w || txt.includes(w))) return b;
     }
     return null;
   }
@@ -84,7 +91,7 @@
       root.querySelectorAll("button,[role='button'],a,[class*='btn'],[class*='button'],[class*='action'],[class*='confirm'],span,div").forEach(b => {
         if (inPanel(b) || b.offsetParent === null) return;
         const t = (b.textContent || "").trim();
-        if (!t || t.length > 16 || bad.test(t)) return;
+        if (!t || t.length > 24 || bad.test(t)) return;
         const low = t.toLowerCase();
         if (words.some(w => low === w || low.startsWith(w))) cand.push(b);
       });
