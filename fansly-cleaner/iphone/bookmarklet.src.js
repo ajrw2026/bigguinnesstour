@@ -247,14 +247,18 @@
       });
       // Newly seen messages are older than everything collected so far → put them first.
       if (batch.length) { rows.unshift(...batch); persist(); }
-      // Keep memory low so iOS doesn't reload the tab: we're crawling upward, so
-      // messages now well below the viewport are already saved — remove them from
-      // the page entirely; blank media on the rest.
+      // Keep memory low so iOS doesn't reload the tab — but DON'T remove the
+      // message nodes themselves (Fansly needs them to keep loading older ones).
+      // Instead strip images/videos (the real memory hog) from messages already
+      // saved and scrolled well below the view.
       const vh = sc.clientHeight || window.innerHeight || 700;
       wraps.forEach(el => {
         try {
-          if (el.getBoundingClientRect().top > vh * 1.5) { el.remove(); return; }
-          el.querySelectorAll("img,video,source").forEach(m => { m.removeAttribute("srcset"); m.removeAttribute("src"); m.removeAttribute("poster"); });
+          const far = el.getBoundingClientRect().top > vh * 1.5;
+          el.querySelectorAll("img,video,source").forEach(m => {
+            if (far) m.remove();
+            else { m.removeAttribute("srcset"); m.removeAttribute("src"); m.removeAttribute("poster"); }
+          });
         } catch (e) {}
       });
     };
