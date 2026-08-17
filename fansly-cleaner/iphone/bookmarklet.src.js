@@ -224,7 +224,7 @@
   async function exportChat(onProgress) {
     const sc = scroller();
     const name = chatName();
-    const key = "fcExp:" + name;
+    const key = "fcExp:" + (location.pathname || name);   // URL is stable across reloads; name isn't loaded yet after one
     let saved = { rows: [] };
     try { saved = JSON.parse(localStorage.getItem(key) || '{"rows":[]}'); } catch (e) {}
     const rows = saved.rows || [];
