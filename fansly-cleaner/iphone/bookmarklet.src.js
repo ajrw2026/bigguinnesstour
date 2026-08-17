@@ -293,7 +293,8 @@
     "border:1px solid #c8a951;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.6);";
   const bs = "flex:1;min-width:64px;padding:12px 8px;border-radius:8px;border:0;font:600 14px -apple-system,sans-serif;";
   panel.innerHTML =
-    "<div style='font-weight:700;margin-bottom:6px;'>Fansly cleaner</div>" +
+    "<div style='font-weight:700;margin-bottom:2px;'>Fansly cleaner</div>" +
+    "<div style='font-size:11px;color:#c8a951;margin-bottom:6px;'>Scan &amp; Export are read‑only — nothing is deleted. Only the red button deletes.</div>" +
     "<div id='fc-status' style='margin:6px 0;font-size:12px;white-space:pre-wrap;max-height:55vh;overflow:auto;min-height:18px;'>Tap Scan to begin.</div>" +
     "<div style='display:flex;gap:6px;flex-wrap:wrap;'>" +
       "<button id='fc-scan' style='" + bs + "background:#c8a951;color:#1a1209;'>Scan</button>" +
@@ -319,7 +320,7 @@
 
   q("#fc-export").addEventListener("click", async () => {
     q("#fc-export").disabled = true;
-    status("Exporting… saves as it goes, so if the page reloads just tap Export again to resume.");
+    status("Exporting (read‑only, nothing deleted)… saves as it goes, so if the page reloads just tap Export again to resume.");
     const { out, count, name, key } = await exportChat(msg => status(msg));
     saveFile("fansly-" + name.replace(/\s+/g, "_") + ".txt", out);
     let copied = false;
