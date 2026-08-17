@@ -232,7 +232,8 @@
     const persist = () => { try { localStorage.setItem(key, JSON.stringify({ rows })); } catch (e) {} };
     const grab = () => {
       const batch = [];
-      [...document.querySelectorAll(SEL.message)].forEach(el => {
+      const wraps = [...document.querySelectorAll(SEL.message)];
+      wraps.forEach(el => {
         const who = isOwn(el) ? "Me" : "Them";
       let txt = (el.innerText || "").replace(/ /g, " ").replace(/[ \t]+/g, " ").trim();
         const media = [];
@@ -246,6 +247,10 @@
       });
       // Newly seen messages are older than everything collected so far → put them first.
       if (batch.length) { rows.unshift(...batch); persist(); }
+      // Free memory (the main cause of the reload): drop media we've already saved.
+      wraps.forEach(el => el.querySelectorAll("img,video,source").forEach(m => {
+        try { m.removeAttribute("srcset"); m.removeAttribute("src"); m.removeAttribute("poster"); } catch (e) {}
+      }));
     };
     // Single upward crawl from the bottom, saving to the phone as we go so a
     // page reload just resumes instead of losing everything.
