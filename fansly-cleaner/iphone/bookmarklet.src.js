@@ -30,7 +30,14 @@
       await sleep(interval || 60);
     }
   }
-  const scroller = () => document.querySelector(SEL.scroll) || document.scrollingElement || document.body;
+  // Pick the element that actually scrolls the messages (tallest visible one
+  // whose content overflows), not just the first class match.
+  const scroller = () => {
+    const cands = [...document.querySelectorAll(SEL.scroll)]
+      .filter(e => e.offsetParent !== null && e.scrollHeight > e.clientHeight + 40);
+    cands.sort((a, b) => b.clientHeight - a.clientHeight);
+    return cands[0] || document.scrollingElement || document.body;
+  };
   const inPanel = (el) => !!(el && el.closest && el.closest("#fc-panel"));
 
   // Your message = timestamp aligned right ("margin-right"), or a right/own class.
@@ -188,24 +195,46 @@
     setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} a.remove(); }, 2000);
     return url;
   }
-  async function exportChat() {
-    await scrollToTop();
-    const wr = [...document.querySelectorAll(SEL.message)];
+  // Walk from the very top to the bottom, collecting messages as they render
+  // (Fansly only keeps a window in the DOM, so one snapshot misses most).
+  async function exportChat(onProgress) {
+    const sc = scroller();
+    let last = -1;
+    for (let i = 0; i < 800; i++) { sc.scrollTop = 0; await sleep(300); const h = sc.scrollHeight; if (h === last && sc.scrollTop === 0) break; last = h; }
+    const seen = new Set(), rows = [];
+    let stall = 0;
+    const grab = () => {
+      [...document.querySelectorAll(SEL.message)].forEach(el => {
+        const who = isOwn(el) ? "Me" : "Them";
+      let txt = (el.innerText || "").replace(/ /g, " ").replace(/[ \t]+/g, " ").trim();
+        const media = [];
+        el.querySelectorAll("img,video,source").forEach(m => {
+          const u2 = m.currentSrc || m.getAttribute("src") || m.getAttribute("poster");
+          if (u2 && !/avatar|profile|emoji/i.test(u2) && media.indexOf(u2) < 0) media.push(u2);
+        });
+        if (!txt && !media.length) return;
+        const key = who + "|" + txt + "|" + media.join(",");
+        if (!seen.has(key)) { seen.add(key); rows.push({ who, txt, media }); }
+      });
+    };
+    grab();
+    for (let i = 0; i < 4000; i++) {
+      const before = sc.scrollTop;
+      sc.scrollTop = Math.min(sc.scrollHeight, sc.scrollTop + Math.max(220, sc.clientHeight * 0.75));
+      await sleep(320);
+      grab();
+      if (onProgress && i % 4 === 0) onProgress(rows.length);
+      if (sc.scrollTop <= before + 2) { if (++stall >= 3) break; } else stall = 0;
+    }
     const name = chatName();
     let out = "Fansly chat export\nChat: " + name + "\nExported: " + new Date().toString() +
-      "\nMessages: " + wr.length + "\n" + "=".repeat(40) + "\n\n";
-    wr.forEach(el => {
-      const who = isOwn(el) ? "Me" : "Them";
-      let txt = (el.innerText || "").replace(/ /g, " ").replace(/[ \t]+/g, " ").trim();
-      const media = [];
-      el.querySelectorAll("img,video,source").forEach(m => {
-        const u2 = m.currentSrc || m.getAttribute("src") || m.getAttribute("poster");
-        if (u2 && !/avatar|profile|emoji/i.test(u2) && media.indexOf(u2) < 0) media.push(u2);
-      });
-      if (media.length) txt += (txt ? "\n" : "") + "[media] " + media.join("\n[media] ");
-      out += "[" + who + "] " + txt + "\n\n";
+      "\nMessages: " + rows.length + "\n" + "=".repeat(40) + "\n\n";
+    rows.forEach(r => {
+      let line = r.txt;
+      if (r.media.length) line += (line ? "\n" : "") + "[media] " + r.media.join("\n[media] ");
+      out += "[" + r.who + "] " + line + "\n\n";
     });
-    return { out, count: wr.length, name };
+    return { out, count: rows.length, name };
   }
 
   // ---- Panel ----
@@ -244,8 +273,8 @@
 
   q("#fc-export").addEventListener("click", async () => {
     q("#fc-export").disabled = true;
-    status("Loading full history to export…");
-    const { out, count, name } = await exportChat();
+    status("Scrolling through the whole chat to export…");
+    const { out, count, name } = await exportChat(c => status("Collecting… " + c + " messages"));
     saveFile("fansly-" + name.replace(/\s+/g, "_") + ".txt", out);
     let copied = false;
     try { await navigator.clipboard.writeText(out); copied = true; } catch (e) {}
