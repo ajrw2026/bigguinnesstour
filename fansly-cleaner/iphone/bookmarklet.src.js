@@ -199,10 +199,19 @@
   // (Fansly only keeps a window in the DOM, so one snapshot misses most).
   async function exportChat(onProgress) {
     const sc = scroller();
-    let last = -1;
-    for (let i = 0; i < 800; i++) { sc.scrollTop = 0; await sleep(300); const h = sc.scrollHeight; if (h === last && sc.scrollTop === 0) break; last = h; }
     const seen = new Set(), rows = [];
-    let stall = 0;
+    const nudge = () => { try { sc.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {} };
+    // Phase 1: crawl UP in small steps (each triggers Fansly to load older) to the very top.
+    let pstall = 0, ph = -1;
+    for (let i = 0; i < 8000; i++) {
+      sc.scrollTop = Math.max(0, sc.scrollTop - Math.max(140, sc.clientHeight * 0.6));
+      nudge();
+      await sleep(380);
+      if (onProgress && i % 3 === 0) onProgress("Loading history… (" + i + ")");
+      const h = sc.scrollHeight;
+      if (sc.scrollTop <= 2 && h === ph) { if (++pstall >= 5) break; } else pstall = 0;
+      ph = h;
+    }
     const grab = () => {
       [...document.querySelectorAll(SEL.message)].forEach(el => {
         const who = isOwn(el) ? "Me" : "Them";
@@ -217,14 +226,19 @@
         if (!seen.has(key)) { seen.add(key); rows.push({ who, txt, media }); }
       });
     };
+    // Phase 2: from the top, crawl DOWN in small steps, collecting in order.
     grab();
-    for (let i = 0; i < 4000; i++) {
+    let dstall = 0;
+    for (let i = 0; i < 8000; i++) {
       const before = sc.scrollTop;
-      sc.scrollTop = Math.min(sc.scrollHeight, sc.scrollTop + Math.max(220, sc.clientHeight * 0.75));
-      await sleep(320);
+      const beforeCount = rows.length;
+      sc.scrollTop = Math.min(sc.scrollHeight, sc.scrollTop + Math.max(140, sc.clientHeight * 0.6));
+      nudge();
+      await sleep(340);
       grab();
-      if (onProgress && i % 4 === 0) onProgress(rows.length);
-      if (sc.scrollTop <= before + 2) { if (++stall >= 3) break; } else stall = 0;
+      if (onProgress && i % 3 === 0) onProgress("Collecting… " + rows.length + " messages");
+      const atBottom = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 2;
+      if (atBottom && before >= sc.scrollHeight - sc.clientHeight - 2 && rows.length === beforeCount) { if (++dstall >= 4) break; } else dstall = 0;
     }
     const name = chatName();
     let out = "Fansly chat export\nChat: " + name + "\nExported: " + new Date().toString() +
@@ -274,7 +288,7 @@
   q("#fc-export").addEventListener("click", async () => {
     q("#fc-export").disabled = true;
     status("Scrolling through the whole chat to export…");
-    const { out, count, name } = await exportChat(c => status("Collecting… " + c + " messages"));
+    const { out, count, name } = await exportChat(msg => status(msg));
     saveFile("fansly-" + name.replace(/\s+/g, "_") + ".txt", out);
     let copied = false;
     try { await navigator.clipboard.writeText(out); copied = true; } catch (e) {}
