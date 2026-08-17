@@ -30,14 +30,31 @@
       await sleep(interval || 60);
     }
   }
-  // Pick the element that actually scrolls the messages (tallest visible one
-  // whose content overflows), not just the first class match.
+  // Find the element that actually scrolls the messages: walk up from a real
+  // message to the nearest overflow:auto/scroll ancestor. Fall back to class
+  // match, then the page itself.
   const scroller = () => {
+    const m = document.querySelector(SEL.message);
+    if (m) {
+      let el = m.parentElement;
+      while (el && el !== document.body) {
+        let oy = "";
+        try { oy = getComputedStyle(el).overflowY; } catch (e) {}
+        if ((oy === "auto" || oy === "scroll" || oy === "overlay") && el.scrollHeight > el.clientHeight + 40) return el;
+        el = el.parentElement;
+      }
+    }
     const cands = [...document.querySelectorAll(SEL.scroll)]
       .filter(e => e.offsetParent !== null && e.scrollHeight > e.clientHeight + 40);
     cands.sort((a, b) => b.clientHeight - a.clientHeight);
     return cands[0] || document.scrollingElement || document.body;
   };
+  // Scroll a target up/down and nudge the page + fire scroll, to trigger lazy loaders.
+  function scrollBy(sc, dy) {
+    sc.scrollTop = Math.max(0, Math.min(sc.scrollHeight, sc.scrollTop + dy));
+    try { window.scrollBy(0, dy); } catch (e) {}
+    [sc, window, document].forEach(t => { try { t.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {} });
+  }
   const inPanel = (el) => !!(el && el.closest && el.closest("#fc-panel"));
 
   // Your message = timestamp aligned right ("margin-right"), or a right/own class.
@@ -156,6 +173,13 @@
   }
   async function diag() {
     let out = "=DIAG2=\n";
+    // Scroll test: does scrolling up load more messages?
+    const sc = scroller();
+    const n0 = document.querySelectorAll(SEL.message).length;
+    out += "scroller " + classOf(sc).slice(0, 34) + "\n";
+    out += "  sH" + Math.round(sc.scrollHeight) + " cH" + Math.round(sc.clientHeight) + " top" + Math.round(sc.scrollTop) + " n=" + n0 + "\n";
+    for (let i = 0; i < 6; i++) { scrollBy(sc, -Math.max(120, sc.clientHeight * 0.6)); await sleep(500); }
+    out += "  after up: top" + Math.round(sc.scrollTop) + " sH" + Math.round(sc.scrollHeight) + " n=" + document.querySelectorAll(SEL.message).length + "\n";
     const wr = [...document.querySelectorAll(SEL.message)];
     out += "wrappers " + wr.length + " (own " + wr.filter(isOwn).length + ")\n";
     const sample = wr.slice(0, 4).concat(wr.slice(-2));
@@ -200,17 +224,15 @@
   async function exportChat(onProgress) {
     const sc = scroller();
     const seen = new Set(), rows = [];
-    const nudge = () => { try { sc.dispatchEvent(new Event("scroll", { bubbles: true })); } catch (e) {} };
-    // Phase 1: crawl UP in small steps (each triggers Fansly to load older) to the very top.
-    let pstall = 0, ph = -1;
-    for (let i = 0; i < 8000; i++) {
-      sc.scrollTop = Math.max(0, sc.scrollTop - Math.max(140, sc.clientHeight * 0.6));
-      nudge();
-      await sleep(380);
-      if (onProgress && i % 3 === 0) onProgress("Loading history… (" + i + ")");
-      const h = sc.scrollHeight;
-      if (sc.scrollTop <= 2 && h === ph) { if (++pstall >= 5) break; } else pstall = 0;
-      ph = h;
+    // Phase 1: crawl UP in small steps to load older history until nothing new appears.
+    let pstall = 0, lastN = -1;
+    for (let i = 0; i < 12000; i++) {
+      scrollBy(sc, -Math.max(120, sc.clientHeight * 0.5));
+      await sleep(420);
+      const n = document.querySelectorAll(SEL.message).length;
+      if (onProgress && i % 2 === 0) onProgress("Loading history… " + n + " loaded");
+      if (n > lastN) { lastN = n; pstall = 0; }
+      else if (sc.scrollTop <= 2) { if (++pstall >= 6) break; }
     }
     const grab = () => {
       [...document.querySelectorAll(SEL.message)].forEach(el => {
@@ -226,17 +248,17 @@
         if (!seen.has(key)) { seen.add(key); rows.push({ who, txt, media }); }
       });
     };
-    // Phase 2: from the top, crawl DOWN in small steps, collecting in order.
+    // Phase 2: from the top, crawl DOWN collecting in order.
+    sc.scrollTop = 0; await sleep(200);
     grab();
     let dstall = 0;
-    for (let i = 0; i < 8000; i++) {
+    for (let i = 0; i < 12000; i++) {
       const before = sc.scrollTop;
       const beforeCount = rows.length;
-      sc.scrollTop = Math.min(sc.scrollHeight, sc.scrollTop + Math.max(140, sc.clientHeight * 0.6));
-      nudge();
-      await sleep(340);
+      scrollBy(sc, Math.max(120, sc.clientHeight * 0.5));
+      await sleep(300);
       grab();
-      if (onProgress && i % 3 === 0) onProgress("Collecting… " + rows.length + " messages");
+      if (onProgress && i % 2 === 0) onProgress("Collecting… " + rows.length + " messages");
       const atBottom = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 2;
       if (atBottom && before >= sc.scrollHeight - sc.clientHeight - 2 && rows.length === beforeCount) { if (++dstall >= 4) break; } else dstall = 0;
     }
