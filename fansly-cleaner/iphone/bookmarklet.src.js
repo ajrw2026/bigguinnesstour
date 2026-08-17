@@ -173,6 +173,41 @@
     return out;
   }
 
+  function chatName() {
+    const h = document.querySelector("[class*='display-name'],[class*='chat-header'],[class*='conversation-header'],[class*='thread-header'],header");
+    const t = h ? (h.innerText || "").trim().split("\n")[0] : "";
+    return (t || "fansly-chat").replace(/[^\w .-]+/g, "").slice(0, 40).trim() || "fansly-chat";
+  }
+  function saveFile(name, text) {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.rel = "noopener"; a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} a.remove(); }, 2000);
+    return url;
+  }
+  async function exportChat() {
+    await scrollToTop();
+    const wr = [...document.querySelectorAll(SEL.message)];
+    const name = chatName();
+    let out = "Fansly chat export\nChat: " + name + "\nExported: " + new Date().toString() +
+      "\nMessages: " + wr.length + "\n" + "=".repeat(40) + "\n\n";
+    wr.forEach(el => {
+      const who = isOwn(el) ? "Me" : "Them";
+      let txt = (el.innerText || "").replace(/ /g, " ").replace(/[ \t]+/g, " ").trim();
+      const media = [];
+      el.querySelectorAll("img,video,source").forEach(m => {
+        const u2 = m.currentSrc || m.getAttribute("src") || m.getAttribute("poster");
+        if (u2 && !/avatar|profile|emoji/i.test(u2) && media.indexOf(u2) < 0) media.push(u2);
+      });
+      if (media.length) txt += (txt ? "\n" : "") + "[media] " + media.join("\n[media] ");
+      out += "[" + who + "] " + txt + "\n\n";
+    });
+    return { out, count: wr.length, name };
+  }
+
   // ---- Panel ----
   const old = document.getElementById("fc-panel");
   if (old) old.remove();
@@ -185,8 +220,9 @@
   panel.innerHTML =
     "<div style='font-weight:700;margin-bottom:6px;'>Fansly cleaner</div>" +
     "<div id='fc-status' style='margin:6px 0;font-size:12px;white-space:pre-wrap;max-height:55vh;overflow:auto;min-height:18px;'>Tap Scan to begin.</div>" +
-    "<div style='display:flex;gap:6px;'>" +
+    "<div style='display:flex;gap:6px;flex-wrap:wrap;'>" +
       "<button id='fc-scan' style='" + bs + "background:#c8a951;color:#1a1209;'>Scan</button>" +
+      "<button id='fc-export' style='" + bs + "background:#2f6b3d;color:#fff;'>Export</button>" +
       "<button id='fc-del' style='" + bs + "background:#6b1c23;color:#fff;display:none;'>Delete all mine</button>" +
       "<button id='fc-debug' style='" + bs + "background:#3d2817;color:#f2e8d5;'>Debug</button>" +
       "<button id='fc-close' style='" + bs + "background:#3d2817;color:#f2e8d5;'>Close</button>" +
@@ -204,6 +240,19 @@
     const text = await diag();
     try { await navigator.clipboard.writeText(text); status("COPIED — paste to the assistant.\n\n" + text); }
     catch (e) { status("(Screenshot this)\n\n" + text); }
+  });
+
+  q("#fc-export").addEventListener("click", async () => {
+    q("#fc-export").disabled = true;
+    status("Loading full history to export…");
+    const { out, count, name } = await exportChat();
+    saveFile("fansly-" + name.replace(/\s+/g, "_") + ".txt", out);
+    let copied = false;
+    try { await navigator.clipboard.writeText(out); copied = true; } catch (e) {}
+    status("Exported " + count + " messages to a file (fansly-" + name.replace(/\s+/g, "_") + ".txt)." +
+      (copied ? "\nAlso copied to your clipboard as a backup." : "") +
+      "\nIf no save prompt appeared, paste the clipboard copy into Notes.");
+    q("#fc-export").disabled = false;
   });
 
   q("#fc-scan").addEventListener("click", async () => {
