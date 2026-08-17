@@ -223,18 +223,15 @@
   // (Fansly only keeps a window in the DOM, so one snapshot misses most).
   async function exportChat(onProgress) {
     const sc = scroller();
-    const seen = new Set(), rows = [];
-    // Phase 1: crawl UP in small steps to load older history until nothing new appears.
-    let pstall = 0, lastN = -1;
-    for (let i = 0; i < 12000; i++) {
-      scrollBy(sc, -Math.max(120, sc.clientHeight * 0.5));
-      await sleep(420);
-      const n = document.querySelectorAll(SEL.message).length;
-      if (onProgress && i % 2 === 0) onProgress("Loading history… " + n + " loaded");
-      if (n > lastN) { lastN = n; pstall = 0; }
-      else if (sc.scrollTop <= 2) { if (++pstall >= 6) break; }
-    }
+    const name = chatName();
+    const key = "fcExp:" + name;
+    let saved = { rows: [] };
+    try { saved = JSON.parse(localStorage.getItem(key) || '{"rows":[]}'); } catch (e) {}
+    const rows = saved.rows || [];
+    const seen = new Set(rows.map(r => r.who + "|" + r.txt + "|" + (r.media || []).join(",")));
+    const persist = () => { try { localStorage.setItem(key, JSON.stringify({ rows })); } catch (e) {} };
     const grab = () => {
+      const batch = [];
       [...document.querySelectorAll(SEL.message)].forEach(el => {
         const who = isOwn(el) ? "Me" : "Them";
       let txt = (el.innerText || "").replace(/ /g, " ").replace(/[ \t]+/g, " ").trim();
@@ -244,33 +241,32 @@
           if (u2 && !/avatar|profile|emoji/i.test(u2) && media.indexOf(u2) < 0) media.push(u2);
         });
         if (!txt && !media.length) return;
-        const key = who + "|" + txt + "|" + media.join(",");
-        if (!seen.has(key)) { seen.add(key); rows.push({ who, txt, media }); }
+        const k = who + "|" + txt + "|" + media.join(",");
+        if (!seen.has(k)) { seen.add(k); batch.push({ who, txt, media }); }
       });
+      // Newly seen messages are older than everything collected so far → put them first.
+      if (batch.length) { rows.unshift(...batch); persist(); }
     };
-    // Phase 2: from the top, crawl DOWN collecting in order.
-    sc.scrollTop = 0; await sleep(200);
-    grab();
-    let dstall = 0;
-    for (let i = 0; i < 12000; i++) {
-      const before = sc.scrollTop;
-      const beforeCount = rows.length;
-      scrollBy(sc, Math.max(120, sc.clientHeight * 0.5));
-      await sleep(300);
+    // Single upward crawl from the bottom, saving to the phone as we go so a
+    // page reload just resumes instead of losing everything.
+    sc.scrollTop = sc.scrollHeight; await sleep(300); grab();
+    let stall = 0;
+    for (let i = 0; i < 20000; i++) {
+      const before = rows.length;
+      scrollBy(sc, -Math.max(120, sc.clientHeight * 0.5));
+      await sleep(400);
       grab();
-      if (onProgress && i % 2 === 0) onProgress("Collecting… " + rows.length + " messages");
-      const atBottom = sc.scrollTop >= sc.scrollHeight - sc.clientHeight - 2;
-      if (atBottom && before >= sc.scrollHeight - sc.clientHeight - 2 && rows.length === beforeCount) { if (++dstall >= 4) break; } else dstall = 0;
+      if (onProgress && i % 2 === 0) onProgress("Saved " + rows.length + " messages so far (keep screen on)…");
+      if (sc.scrollTop <= 2 && rows.length === before) { if (++stall >= 6) break; } else stall = 0;
     }
-    const name = chatName();
     let out = "Fansly chat export\nChat: " + name + "\nExported: " + new Date().toString() +
       "\nMessages: " + rows.length + "\n" + "=".repeat(40) + "\n\n";
     rows.forEach(r => {
       let line = r.txt;
-      if (r.media.length) line += (line ? "\n" : "") + "[media] " + r.media.join("\n[media] ");
+      if (r.media && r.media.length) line += (line ? "\n" : "") + "[media] " + r.media.join("\n[media] ");
       out += "[" + r.who + "] " + line + "\n\n";
     });
-    return { out, count: rows.length, name };
+    return { out, count: rows.length, name, key };
   }
 
   // ---- Panel ----
@@ -309,11 +305,12 @@
 
   q("#fc-export").addEventListener("click", async () => {
     q("#fc-export").disabled = true;
-    status("Scrolling through the whole chat to export…");
-    const { out, count, name } = await exportChat(msg => status(msg));
+    status("Exporting… saves as it goes, so if the page reloads just tap Export again to resume.");
+    const { out, count, name, key } = await exportChat(msg => status(msg));
     saveFile("fansly-" + name.replace(/\s+/g, "_") + ".txt", out);
     let copied = false;
     try { await navigator.clipboard.writeText(out); copied = true; } catch (e) {}
+    try { localStorage.removeItem(key); } catch (e) {}   // finished — clear the saved progress
     status("Exported " + count + " messages to a file (fansly-" + name.replace(/\s+/g, "_") + ".txt)." +
       (copied ? "\nAlso copied to your clipboard as a backup." : "") +
       "\nIf no save prompt appeared, paste the clipboard copy into Notes.");
