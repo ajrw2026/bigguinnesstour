@@ -249,15 +249,18 @@
     };
     // Single upward crawl from the bottom, saving to the phone as we go so a
     // page reload just resumes instead of losing everything.
-    sc.scrollTop = sc.scrollHeight; await sleep(300); grab();
+    sc.scrollTop = sc.scrollHeight; await sleep(180); grab();
     let stall = 0;
-    for (let i = 0; i < 20000; i++) {
+    for (let i = 0; i < 40000; i++) {
       const before = rows.length;
-      scrollBy(sc, -Math.max(120, sc.clientHeight * 0.5));
-      await sleep(400);
+      scrollBy(sc, -Math.max(200, sc.clientHeight * 0.9));   // big jumps = fewer steps
+      await sleep(170);                                       // short wait per step
       grab();
-      if (onProgress && i % 2 === 0) onProgress("Saved " + rows.length + " messages so far (keep screen on)…");
-      if (sc.scrollTop <= 2 && rows.length === before) { if (++stall >= 6) break; } else stall = 0;
+      if (onProgress && i % 3 === 0) onProgress("Saved " + rows.length + " messages so far (keep screen on)…");
+      if (sc.scrollTop <= 2 && rows.length === before) {
+        await sleep(500); grab();                            // near the top: give the loader a moment before concluding
+        if (rows.length === before) { if (++stall >= 4) break; } else stall = 0;
+      } else stall = 0;
     }
     let out = "Fansly chat export\nChat: " + name + "\nExported: " + new Date().toString() +
       "\nMessages: " + rows.length + "\n" + "=".repeat(40) + "\n\n";
@@ -361,7 +364,7 @@
       const sc = scroller();
       const beforeH = sc.scrollHeight;
       sc.scrollTop = 0;
-      await sleep(550);
+      await sleep(350);
       if (sc.scrollHeight !== beforeH) { stuck = 0; continue; }   // new history loaded, retry
       if (++stuck >= 2) {
         const left = [...document.querySelectorAll(SEL.message)].filter(isOwn).length;
